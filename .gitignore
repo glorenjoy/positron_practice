@@ -1,0 +1,70 @@
+# Git ignore file for business analytics project
+
+# Data files (keep structure, ignore large datasets)
+data/raw/*.csv
+data/processed/*.csv
+!data/raw/sales_data.csv
+!data/processed/.gitkeep
+
+# Output files
+output/figures/*.png
+output/figures/*.jpg
+output/figures/*.pdf
+output/tables/*.csv
+output/tables/*.xlsx
+
+# R
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.ipynb_checkpoints/
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Reports
+reports/*.html
+reports/*.pdf
+reports/*_files/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak

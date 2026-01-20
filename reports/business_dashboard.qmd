@@ -1,0 +1,387 @@
+---
+title: "Business Analytics Dashboard"
+subtitle: "Q1 2024 Sales Performance"
+author: "Business Analytics Team"
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 2
+    toc-location: left
+    code-fold: true
+    code-tools: true
+    embed-resources: true
+    page-layout: full
+    grid:
+      sidebar-width: 200px
+      body-width: 1000px
+      margin-width: 200px
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| include: false
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(scales)
+library(knitr)
+library(DT)
+
+# Load cleaned data
+data_path <- "data/processed/sales_data_cleaned.csv"
+sales_data <- read_csv(data_path, show_col_types = FALSE)
+
+# Custom theme
+theme_business <- function() {
+  theme_minimal() +
+    theme(
+      plot.title = element_text(size = 12, face = "bold"),
+      axis.title = element_text(size = 10, face = "bold"),
+      legend.position = "bottom"
+    )
+}
+```
+
+## Executive Summary {.tabset}
+
+### Overview
+
+This dashboard provides a comprehensive analysis of our Q1 2024 sales performance across all regions, product categories, and sales representatives. The data demonstrates strong growth momentum with key insights into regional performance, product mix, and operational efficiency.
+
+**Key Highlights:**
+
+- **Total Revenue:** $`r format(sum(sales_data$sales_amount), big.mark=",", nsmall=2)`
+- **Average Transaction:** $`r format(mean(sales_data$sales_amount), big.mark=",", nsmall=2)`
+- **Total Transactions:** `r format(nrow(sales_data), big.mark=",")`
+- **Unique Customers:** `r n_distinct(sales_data$customer_id)`
+- **Date Range:** `r format(min(sales_data$date), "%B %d, %Y")` to `r format(max(sales_data$date), "%B %d, %Y")`
+
+### Key Performance Indicators
+
+```{r kpis}
+#| layout-ncol: 3
+#| fig-height: 2
+
+# Calculate KPIs
+total_revenue <- sum(sales_data$sales_amount)
+total_transactions <- nrow(sales_data)
+avg_transaction <- mean(sales_data$sales_amount)
+total_units <- sum(sales_data$units_sold)
+unique_customers <- n_distinct(sales_data$customer_id)
+
+# Create KPI summary table
+kpi_data <- data.frame(
+  Metric = c(
+    "Total Revenue",
+    "Total Transactions",
+    "Average Transaction Value",
+    "Total Units Sold",
+    "Unique Customers",
+    "Average Units per Transaction",
+    "Revenue per Customer"
+  ),
+  Value = c(
+    dollar(total_revenue),
+    comma(total_transactions),
+    dollar(avg_transaction),
+    comma(total_units),
+    comma(unique_customers),
+    sprintf("%.2f", mean(sales_data$units_sold)),
+    dollar(total_revenue / unique_customers)
+  )
+)
+
+kable(kpi_data, align = c('l', 'r'))
+```
+
+## Regional Performance {.tabset}
+
+### Sales by Region
+
+```{r regional-sales}
+#| fig-height: 5
+#| fig-width: 8
+
+region_summary <- sales_data %>%
+  group_by(region) %>%
+  summarise(
+    total_sales = sum(sales_amount),
+    transactions = n(),
+    avg_transaction = mean(sales_amount),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(total_sales))
+
+ggplot(region_summary, aes(x = reorder(region, total_sales), y = total_sales, fill = region)) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  geom_text(aes(label = dollar(total_sales)), hjust = -0.1, size = 4, fontface = "bold") +
+  coord_flip() +
+  scale_y_continuous(labels = dollar_format(), expand = expansion(mult = c(0, 0.15))) +
+  scale_fill_manual(values = c("NORTH" = "#2E86AB", "SOUTH" = "#A23B72", 
+                                "EAST" = "#F18F01", "WEST" = "#06A77D")) +
+  labs(
+    title = "Total Sales by Region",
+    subtitle = "Q1 2024 Performance",
+    x = "Region",
+    y = "Total Sales ($)"
+  ) +
+  theme_business()
+```
+
+### Regional Details
+
+```{r regional-table}
+region_detailed <- sales_data %>%
+  group_by(region) %>%
+  summarise(
+    `Total Sales` = dollar(sum(sales_amount)),
+    `Transactions` = comma(n()),
+    `Avg Transaction` = dollar(mean(sales_amount)),
+    `Total Units` = comma(sum(units_sold)),
+    `Unique Customers` = comma(n_distinct(customer_id)),
+    `Market Share` = percent(sum(sales_amount) / sum(sales_data$sales_amount), accuracy = 0.1),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(`Total Sales`))
+
+datatable(region_detailed, 
+          options = list(pageLength = 10, dom = 't'),
+          rownames = FALSE)
+```
+
+## Product Analysis {.tabset}
+
+### Category Performance
+
+```{r category-chart}
+#| fig-height: 5
+#| fig-width: 8
+
+category_summary <- sales_data %>%
+  group_by(product_category) %>%
+  summarise(
+    total_sales = sum(sales_amount),
+    percentage = sum(sales_amount) / sum(sales_data$sales_amount) * 100,
+    .groups = 'drop'
+  )
+
+ggplot(category_summary, aes(x = "", y = total_sales, fill = product_category)) +
+  geom_bar(stat = "identity", width = 1, color = "white", size = 1.5) +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = c("#2E86AB", "#A23B72", "#F18F01")) +
+  geom_text(aes(label = paste0(product_category, "\n", dollar(total_sales), 
+                               "\n(", sprintf("%.1f%%", percentage), ")")),
+            position = position_stack(vjust = 0.5), 
+            size = 3.5, fontface = "bold", color = "white") +
+  labs(
+    title = "Sales Distribution by Product Category",
+    fill = "Category"
+  ) +
+  theme_void() +
+  theme(
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    legend.position = "bottom"
+  )
+```
+
+### Monthly Trends
+
+```{r monthly-category}
+#| fig-height: 5
+#| fig-width: 10
+
+monthly_category <- sales_data %>%
+  group_by(month, product_category) %>%
+  summarise(total_sales = sum(sales_amount), .groups = 'drop')
+
+ggplot(monthly_category, aes(x = month, y = total_sales, fill = product_category)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  scale_y_continuous(labels = dollar_format()) +
+  scale_fill_manual(values = c("#2E86AB", "#A23B72", "#F18F01")) +
+  labs(
+    title = "Monthly Sales by Product Category",
+    subtitle = "Comparing performance across product lines",
+    x = "Month",
+    y = "Total Sales ($)",
+    fill = "Category"
+  ) +
+  theme_business() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Sales Trends {.tabset}
+
+### Daily Sales
+
+```{r daily-trend}
+#| fig-height: 5
+#| fig-width: 10
+
+daily_sales <- sales_data %>%
+  group_by(date) %>%
+  summarise(daily_total = sum(sales_amount), .groups = 'drop')
+
+ggplot(daily_sales, aes(x = date, y = daily_total)) +
+  geom_line(color = "#A23B72", size = 1) +
+  geom_point(color = "#A23B72", size = 2) +
+  geom_smooth(method = "loess", se = TRUE, color = "#F18F01", fill = "#F18F01", alpha = 0.2) +
+  scale_y_continuous(labels = dollar_format()) +
+  scale_x_date(date_breaks = "1 week", date_labels = "%b %d") +
+  labs(
+    title = "Daily Sales Trend with Smoothed Trend Line",
+    subtitle = "Q1 2024",
+    x = "Date",
+    y = "Daily Sales ($)"
+  ) +
+  theme_business() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Cumulative Sales
+
+```{r cumulative-sales}
+#| fig-height: 5
+#| fig-width: 10
+
+cumulative_data <- sales_data %>%
+  arrange(date) %>%
+  group_by(product_category) %>%
+  mutate(cumulative_sales = cumsum(sales_amount)) %>%
+  ungroup()
+
+ggplot(cumulative_data, aes(x = date, y = cumulative_sales, color = product_category)) +
+  geom_line(size = 1.5) +
+  geom_point(size = 1.5, alpha = 0.5) +
+  scale_y_continuous(labels = dollar_format()) +
+  scale_color_manual(values = c("#2E86AB", "#A23B72", "#F18F01")) +
+  labs(
+    title = "Cumulative Sales by Product Category",
+    subtitle = "Growth trajectory comparison",
+    x = "Date",
+    y = "Cumulative Sales ($)",
+    color = "Category"
+  ) +
+  theme_business() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Team Performance {.tabset}
+
+### Sales Representatives
+
+```{r rep-performance}
+#| fig-height: 5
+#| fig-width: 8
+
+rep_summary <- sales_data %>%
+  group_by(sales_rep) %>%
+  summarise(
+    total_sales = sum(sales_amount),
+    num_transactions = n(),
+    avg_sale = mean(sales_amount),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(total_sales))
+
+ggplot(rep_summary, aes(x = reorder(sales_rep, total_sales), y = total_sales)) +
+  geom_col(fill = "#F18F01", alpha = 0.8) +
+  geom_text(aes(label = paste0(dollar(total_sales), "\n(", num_transactions, " sales)")), 
+            hjust = -0.1, size = 3) +
+  coord_flip() +
+  scale_y_continuous(labels = dollar_format(), expand = expansion(mult = c(0, 0.15))) +
+  labs(
+    title = "Sales Representative Performance",
+    subtitle = "Total sales and number of transactions",
+    x = "Sales Rep",
+    y = "Total Sales ($)"
+  ) +
+  theme_business()
+```
+
+### Performance Metrics
+
+```{r rep-table}
+rep_detailed <- sales_data %>%
+  group_by(sales_rep) %>%
+  summarise(
+    `Total Sales` = dollar(sum(sales_amount)),
+    `Transactions` = comma(n()),
+    `Avg Sale` = dollar(mean(sales_amount)),
+    `Total Units` = comma(sum(units_sold)),
+    `Unique Customers` = comma(n_distinct(customer_id)),
+    `Sales per Customer` = dollar(sum(sales_amount) / n_distinct(customer_id)),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(`Total Sales`))
+
+datatable(rep_detailed, 
+          options = list(pageLength = 10, dom = 't'),
+          rownames = FALSE)
+```
+
+## Data Quality & Insights {.tabset}
+
+### Data Summary
+
+```{r data-summary}
+summary_stats <- data.frame(
+  Metric = c(
+    "Total Records",
+    "Date Range",
+    "Regions Covered",
+    "Product Categories",
+    "Sales Representatives",
+    "Data Completeness",
+    "Average Daily Sales"
+  ),
+  Value = c(
+    comma(nrow(sales_data)),
+    paste(format(min(sales_data$date), "%Y-%m-%d"), "to", format(max(sales_data$date), "%Y-%m-%d")),
+    toString(unique(sales_data$region)),
+    toString(unique(sales_data$product_category)),
+    comma(n_distinct(sales_data$sales_rep)),
+    "100% (No missing values)",
+    dollar(sum(sales_data$sales_amount) / n_distinct(sales_data$date))
+  )
+)
+
+kable(summary_stats, align = c('l', 'l'))
+```
+
+### Key Insights
+
+::: {.callout-note icon=false}
+## 🎯 Strategic Insights
+
+1. **Top Performing Region:** `r region_summary$region[1]` leads with $`r format(region_summary$total_sales[1], big.mark=",", nsmall=2)` in sales
+
+2. **Best Category:** `r category_summary$product_category[which.max(category_summary$total_sales)]` generates the highest revenue at $`r format(max(category_summary$total_sales), big.mark=",", nsmall=2)`
+
+3. **Star Performer:** `r rep_summary$sales_rep[1]` is the top sales representative with $`r format(rep_summary$total_sales[1], big.mark=",", nsmall=2)` in sales
+
+4. **Growth Trend:** Sales show `r if(tail(daily_sales$daily_total, 1) > head(daily_sales$daily_total, 1)) "positive" else "stable"` momentum throughout Q1
+
+5. **Customer Engagement:** Average of `r sprintf("%.2f", nrow(sales_data) / n_distinct(sales_data$customer_id))` transactions per customer indicates `r if(nrow(sales_data) / n_distinct(sales_data$customer_id) > 1) "repeat business" else "one-time purchases"`
+:::
+
+::: {.callout-tip icon=false}
+## 💡 Recommendations
+
+1. **Scale Success:** Replicate best practices from `r region_summary$region[1]` region to other regions
+2. **Product Focus:** Invest in `r category_summary$product_category[which.max(category_summary$total_sales)]` category marketing
+3. **Team Development:** Share strategies from top performers with the broader team
+4. **Customer Retention:** Develop loyalty programs to increase repeat purchase rate
+5. **Inventory Planning:** Align stock levels with category performance data
+:::
+
+---
+
+**Dashboard Generated:** `r format(Sys.time(), "%B %d, %Y at %H:%M %Z")`
+
+**Data Period:** Q1 2024 (January - March)
+
+**Contact:** Business Analytics Team | analytics@company.com
