@@ -70,7 +70,7 @@ plot_sales_trend <- function(data) {
     summarise(daily_total = sum(sales_amount), .groups = 'drop')
   
   p <- ggplot(daily_sales, aes(x = date, y = daily_total)) +
-    geom_line(color = "#A23B72", size = 1) +
+    geom_line(color = "#A23B72", linewidth = 1) +
     geom_point(color = "#A23B72", size = 2) +
     geom_smooth(method = "loess", se = TRUE, color = "#F18F01", alpha = 0.2) +
     scale_y_continuous(labels = dollar_format()) +
@@ -99,7 +99,7 @@ plot_sales_by_category <- function(data) {
     )
   
   p <- ggplot(category_summary, aes(x = "", y = total_sales, fill = product_category)) +
-    geom_bar(stat = "identity", width = 1, color = "white", size = 2) +
+    geom_bar(stat = "identity", width = 1, color = "white", linewidth = 2) +
     coord_polar("y", start = 0) +
     scale_fill_manual(values = c("#2E86AB", "#A23B72", "#F18F01")) +
     labs(
